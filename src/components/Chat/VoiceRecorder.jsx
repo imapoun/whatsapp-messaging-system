@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Send, X, Square } from 'lucide-react';
+import { Mic, X, Square } from 'lucide-react';
 
 const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [audioBlob, setAudioBlob] = useState(null);
   
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -43,7 +42,6 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     clearInterval(timerRef.current);
     setIsRecording(false);
     setRecordingTime(0);
-    setAudioBlob(null);
     chunksRef.current = [];
   };
 
@@ -79,22 +77,19 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
         const blob = new Blob(chunksRef.current, { 
           type: 'audio/webm;codecs=opus'
         });
-        setAudioBlob(blob);
         
-        // Auto-send when recording stops
-        setTimeout(() => {
-          if (blob && recordingTime > 0) {
-            const voiceMessage = {
-              type: 'voice',
-              audioBlob: blob,
-              rawDuration: recordingTime,
-              size: blob.size,
-              mimeType: blob.type
-            };
-            onSend(voiceMessage);
-            onClose();
-          }
-        }, 100);
+        // Send immediately when recording stops
+        if (blob && recordingTime > 0) {
+          const voiceMessage = {
+            type: 'voice',
+            audioBlob: blob,
+            rawDuration: recordingTime,
+            size: blob.size,
+            mimeType: blob.type
+          };
+          onSend(voiceMessage);
+        }
+        onClose();
       };
 
       mediaRecorder.start(100);
@@ -135,7 +130,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b">
           <h3 className="text-lg font-semibold text-gray-800">
-            {isRecording ? 'Recording Voice Message' : 'Voice Message'}
+            Recording Voice Message
           </h3>
           <button
             onClick={handleCancel}
@@ -170,28 +165,20 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             </div>
             <p className="text-sm text-gray-500 mt-1">
               {isRecording 
-                ? 'Recording... Tap stop to send'
-                : 'Tap to start recording'
+                ? 'Recording... Press stop to send'
+                : 'Starting recording...'
               }
             </p>
           </div>
 
-          <div className="flex items-center justify-center space-x-4">
-            {isRecording ? (
+          <div className="flex items-center justify-center">
+            {isRecording && (
               <button
                 onClick={stopRecording}
                 className="p-4 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg"
                 title="Stop and Send"
               >
                 <Square className="w-6 h-6" />
-              </button>
-            ) : (
-              <button
-                onClick={startRecording}
-                className="p-6 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors animate-pulse shadow-lg"
-                title="Start Recording"
-              >
-                <Mic className="w-8 h-8" />
               </button>
             )}
           </div>
