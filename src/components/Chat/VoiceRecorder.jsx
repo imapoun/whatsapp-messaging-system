@@ -1,17 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Send, X, Play, Pause, Square } from 'lucide-react';
+import { Mic, Send, X, Square } from 'lucide-react';
 
 const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackTime, setPlaybackTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   
   const mediaRecorderRef = useRef(null);
-  const audioRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const streamRef = useRef(null);
@@ -45,17 +40,10 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-    }
     clearInterval(timerRef.current);
     setIsRecording(false);
     setRecordingTime(0);
     setAudioBlob(null);
-    setAudioUrl(null);
-    setIsPlaying(false);
-    setPlaybackTime(0);
-    setDuration(0);
     chunksRef.current = [];
   };
 
@@ -66,13 +54,28 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1
         } 
       });
       
       streamRef.current = stream;
       
+      // Use a more compatible format
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = ''; // Let browser choose
+          }
+        }
+      }
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+        mimeType: mimeType || undefined,
+        audioBitsPerSecond: 128000
       });
       
       mediaRecorderRef.current = mediaRecorder;
@@ -89,15 +92,18 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
           type: mediaRecorder.mimeType || 'audio/webm' 
         });
         setAudioBlob(blob);
-        
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
-        
-        // Set duration from recording time
-        setDuration(recordingTime);
+        console.log('Recording stopped, blob created:', {
+          size: blob.size,
+          type: blob.type,
+          duration: recordingTime
+        });
       };
 
-      mediaRecorder.start(100); // Collect data every 100ms
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event.error);
+      };
+
+      mediaRecorder.start(1000); // Collect data every second
       setIsRecording(true);
       setRecordingTime(0);
     } catch (error) {
@@ -117,52 +123,6 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     setIsRecording(false);
   };
 
-  const playAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.play().catch(error => {
-        console.error('Audio play failed:', error);
-      });
-      setIsPlaying(true);
-    }
-  };
-
-  const pauseAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    }
-  };
-
-  const handleAudioTimeUpdate = () => {
-    if (audioRef.current) {
-      setPlaybackTime(audioRef.current.currentTime);
-    }
-  };
-
-  const handleAudioEnded = () => {
-    setIsPlaying(false);
-    setPlaybackTime(0);
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-    }
-  };
-
-  const handleAudioLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
-    }
-  };
-
-  const handleSeek = (e) => {
-    if (audioRef.current && duration > 0) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const newTime = (clickX / rect.width) * duration;
-      audioRef.current.currentTime = newTime;
-      setPlaybackTime(newTime);
-    }
-  };
-
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -170,14 +130,15 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   };
 
   const handleSend = () => {
-    if (audioBlob) {
+    if (audioBlob && recordingTime > 0) {
       const voiceMessage = {
         type: 'voice',
         audioBlob,
-        rawDuration: duration, // Send raw duration in seconds
+        rawDuration: recordingTime, // Send raw duration in seconds
         size: audioBlob.size,
         mimeType: audioBlob.type
       };
+      console.log('Sending voice message:', voiceMessage);
       onSend(voiceMessage);
       onClose();
     }
@@ -218,7 +179,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
                     isRecording ? 'animate-pulse' : ''
                   }`}
                   style={{
-                    height: `${Math.random() * 100}%`,
+                    height: `${20 + Math.random() * 80}%`,
                     minHeight: '4px',
                     opacity: isRecording ? 1 : 0.3
                   }}
@@ -234,61 +195,20 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             </div>
             <p className="text-sm text-gray-500 mt-1">
               {isRecording 
-                ? 'Recording...'
+                ? 'Recording... Tap stop when finished'
                 : audioBlob 
-                  ? 'Recording complete - tap play to listen'
+                  ? 'Recording complete - ready to send'
                   : 'Tap to start recording'
               }
             </p>
           </div>
-
-          {/* Playback Controls (when recording is done) */}
-          {audioBlob && audioUrl && (
-            <div className="space-y-4">
-              <audio
-                ref={audioRef}
-                src={audioUrl}
-                onTimeUpdate={handleAudioTimeUpdate}
-                onEnded={handleAudioEnded}
-                onLoadedMetadata={handleAudioLoadedMetadata}
-                preload="metadata"
-              />
-              
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div 
-                  className="bg-gray-200 rounded-full h-2 cursor-pointer"
-                  onClick={handleSeek}
-                >
-                  <div 
-                    className="bg-green-500 rounded-full h-2 transition-all duration-100"
-                    style={{ width: `${duration > 0 ? (playbackTime / duration) * 100 : 0}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>{formatTime(playbackTime)}</span>
-                  <span>{formatTime(duration)}</span>
-                </div>
-              </div>
-
-              {/* Playback Button */}
-              <div className="flex justify-center">
-                <button
-                  onClick={isPlaying ? pauseAudio : playAudio}
-                  className="p-3 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
-                >
-                  {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Recording Controls */}
           <div className="flex items-center justify-center space-x-4">
             {isRecording ? (
               <button
                 onClick={stopRecording}
-                className="p-4 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                className="p-4 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg"
                 title="Stop Recording"
               >
                 <Square className="w-6 h-6" />
@@ -296,7 +216,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             ) : !audioBlob ? (
               <button
                 onClick={startRecording}
-                className="p-6 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors animate-pulse"
+                className="p-6 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors animate-pulse shadow-lg"
                 title="Start Recording"
               >
                 <Mic className="w-8 h-8" />
@@ -305,8 +225,8 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
           </div>
         </div>
 
-        {/* Footer Actions */}
-        {audioBlob && (
+        {/* Footer Actions - Only show when recording is complete */}
+        {audioBlob && !isRecording && (
           <div className="flex items-center justify-between p-6 border-t bg-gray-50 rounded-b-2xl">
             <button
               onClick={handleCancel}
@@ -317,10 +237,10 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             
             <button
               onClick={handleSend}
-              className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+              className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2 shadow-md"
             >
               <Send className="w-4 h-4" />
-              <span>Send</span>
+              <span>Send ({formatTime(recordingTime)})</span>
             </button>
           </div>
         )}

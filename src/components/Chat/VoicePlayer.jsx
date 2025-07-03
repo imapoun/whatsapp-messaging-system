@@ -7,6 +7,7 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
   const [audioDuration, setAudioDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   
   const audioRef = useRef(null);
 
@@ -17,6 +18,11 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
     const handleLoadedMetadata = () => {
       setAudioDuration(audio.duration);
       setIsLoading(false);
+      setHasError(false);
+      console.log('Audio loaded successfully:', {
+        duration: audio.duration,
+        src: audioDataURL.substring(0, 50) + '...'
+      });
     };
 
     const handleTimeUpdate = () => {
@@ -31,20 +37,36 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
 
     const handleCanPlay = () => {
       setIsLoading(false);
+      setHasError(false);
     };
 
     const handleError = (e) => {
       setIsLoading(false);
-      console.error('Audio failed to load:', e);
+      setHasError(true);
+      console.error('Audio failed to load:', {
+        error: e,
+        audioSrc: audioDataURL ? audioDataURL.substring(0, 50) + '...' : 'null',
+        audioElement: audio
+      });
     };
 
+    const handleLoadStart = () => {
+      setIsLoading(true);
+      setHasError(false);
+    };
+
+    audio.addEventListener('loadstart', handleLoadStart);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
 
+    // Force load the audio
+    audio.load();
+
     return () => {
+      audio.removeEventListener('loadstart', handleLoadStart);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
@@ -55,16 +77,23 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
 
   const togglePlayPause = () => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || hasError) return;
 
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
     } else {
-      audio.play().catch(error => {
-        console.error('Audio play failed:', error);
-      });
-      setIsPlaying(true);
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch(error => {
+            console.error('Audio play failed:', error);
+            setHasError(true);
+          });
+      }
     }
   };
 
@@ -78,7 +107,7 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
 
   const handleSeek = (e) => {
     const audio = audioRef.current;
-    if (!audio || audioDuration === 0) return;
+    if (!audio || audioDuration === 0 || hasError) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
@@ -96,6 +125,7 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
   };
 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
+  const displayDuration = audioDuration || initialDuration || 0;
 
   // Show loading state if no audioDataURL yet
   if (!audioDataURL) {
@@ -111,14 +141,37 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
     );
   }
 
+  // Show error state
+  if (hasError) {
+    return (
+      <div className={`flex items-center space-x-3 p-3 rounded-lg ${className}`}>
+        <div className={`flex-shrink-0 p-2 rounded-full ${
+          isOwnMessage ? 'bg-red-400' : 'bg-red-500'
+        }`}>
+          <VolumeX className="w-5 h-5 text-white" />
+        </div>
+        <div className="flex-1">
+          <p className={`text-sm ${isOwnMessage ? 'text-green-100' : 'text-gray-600'}`}>
+            Audio unavailable
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex items-center space-x-3 p-3 rounded-lg ${className}`}>
-      <audio ref={audioRef} src={audioDataURL} preload="metadata" />
+      <audio 
+        ref={audioRef} 
+        src={audioDataURL} 
+        preload="metadata"
+        crossOrigin="anonymous"
+      />
       
       {/* Play/Pause Button */}
       <button
         onClick={togglePlayPause}
-        disabled={isLoading}
+        disabled={isLoading || hasError}
         className={`flex-shrink-0 p-2 rounded-full transition-colors ${
           isOwnMessage
             ? 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white'
@@ -182,7 +235,7 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
           isOwnMessage ? 'text-green-100' : 'text-gray-500'
         }`}>
           <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(audioDuration || initialDuration || 0)}</span>
+          <span>{formatTime(displayDuration)}</span>
         </div>
       </div>
 
