@@ -73,7 +73,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { 
           type: 'audio/webm;codecs=opus'
         });
@@ -87,8 +87,12 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             size: blob.size,
             mimeType: blob.type
           };
-          onSend(voiceMessage);
+          
+          // Call onSend and wait for it to complete
+          await onSend(voiceMessage);
         }
+        
+        // Close the recorder after sending
         onClose();
       };
 
@@ -103,13 +107,13 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      setIsRecording(false);
       mediaRecorderRef.current.stop();
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
-    setIsRecording(false);
   };
 
   const formatTime = (seconds) => {
@@ -166,13 +170,13 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             <p className="text-sm text-gray-500 mt-1">
               {isRecording 
                 ? 'Recording... Press stop to send'
-                : 'Starting recording...'
+                : 'Sending voice message...'
               }
             </p>
           </div>
 
           <div className="flex items-center justify-center">
-            {isRecording && (
+            {isRecording ? (
               <button
                 onClick={stopRecording}
                 className="p-4 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg"
@@ -180,6 +184,10 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
               >
                 <Square className="w-6 h-6" />
               </button>
+            ) : (
+              <div className="p-4">
+                <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
             )}
           </div>
         </div>
