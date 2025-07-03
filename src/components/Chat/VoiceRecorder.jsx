@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send, X, Play, Pause, Square } from 'lucide-react';
+import { Mic, Send, X, Play, Pause, Square } from 'lucide-react';
 
 const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
@@ -28,7 +27,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   }, [isOpen]);
 
   useEffect(() => {
-    if (isRecording && !isPaused) {
+    if (isRecording) {
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -37,7 +36,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     }
 
     return () => clearInterval(timerRef.current);
-  }, [isRecording, isPaused]);
+  }, [isRecording]);
 
   const cleanup = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -51,7 +50,6 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     }
     clearInterval(timerRef.current);
     setIsRecording(false);
-    setIsPaused(false);
     setRecordingTime(0);
     setAudioBlob(null);
     setAudioUrl(null);
@@ -95,11 +93,8 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
         
-        // Get duration
-        const audio = new Audio(url);
-        audio.addEventListener('loadedmetadata', () => {
-          setDuration(audio.duration);
-        });
+        // Set duration from recording time
+        setDuration(recordingTime);
       };
 
       mediaRecorder.start(100); // Collect data every 100ms
@@ -112,20 +107,6 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     }
   };
 
-  const pauseRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.pause();
-      setIsPaused(true);
-    }
-  };
-
-  const resumeRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      mediaRecorderRef.current.resume();
-      setIsPaused(false);
-    }
-  };
-
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
@@ -134,12 +115,13 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
     setIsRecording(false);
-    setIsPaused(false);
   };
 
   const playAudio = () => {
     if (audioRef.current) {
-      audioRef.current.play();
+      audioRef.current.play().catch(error => {
+        console.error('Audio play failed:', error);
+      });
       setIsPlaying(true);
     }
   };
@@ -162,6 +144,12 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     setPlaybackTime(0);
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
+    }
+  };
+
+  const handleAudioLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
     }
   };
 
@@ -208,7 +196,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <h3 className="text-lg font-semibold text-gray-800">
-            {isRecording ? 'Recording Voice Message' : 'Voice Message'}
+            {isRecording ? 'Recording Voice Message' : audioBlob ? 'Voice Message Ready' : 'Voice Message'}
           </h3>
           <button
             onClick={handleCancel}
@@ -227,14 +215,12 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
                 <div
                   key={i}
                   className={`w-1 bg-green-500 rounded-full transition-all duration-300 ${
-                    isRecording && !isPaused
-                      ? 'animate-pulse'
-                      : ''
+                    isRecording ? 'animate-pulse' : ''
                   }`}
                   style={{
                     height: `${Math.random() * 100}%`,
                     minHeight: '4px',
-                    opacity: isRecording && !isPaused ? 1 : 0.3
+                    opacity: isRecording ? 1 : 0.3
                   }}
                 />
               ))}
@@ -248,11 +234,9 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             </div>
             <p className="text-sm text-gray-500 mt-1">
               {isRecording 
-                ? isPaused 
-                  ? 'Recording paused' 
-                  : 'Recording...'
+                ? 'Recording...'
                 : audioBlob 
-                  ? 'Recording complete'
+                  ? 'Recording complete - tap play to listen'
                   : 'Tap to start recording'
               }
             </p>
@@ -266,11 +250,8 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
                 src={audioUrl}
                 onTimeUpdate={handleAudioTimeUpdate}
                 onEnded={handleAudioEnded}
-                onLoadedMetadata={() => {
-                  if (audioRef.current) {
-                    setDuration(audioRef.current.duration);
-                  }
-                }}
+                onLoadedMetadata={handleAudioLoadedMetadata}
+                preload="metadata"
               />
               
               {/* Progress Bar */}
@@ -305,23 +286,13 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
           {/* Recording Controls */}
           <div className="flex items-center justify-center space-x-4">
             {isRecording ? (
-              <>
-                <button
-                  onClick={isPaused ? resumeRecording : pauseRecording}
-                  className="p-4 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full transition-colors"
-                  title={isPaused ? "Resume" : "Pause"}
-                >
-                  {isPaused ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />}
-                </button>
-                
-                <button
-                  onClick={stopRecording}
-                  className="p-4 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
-                  title="Stop Recording"
-                >
-                  <Square className="w-6 h-6" />
-                </button>
-              </>
+              <button
+                onClick={stopRecording}
+                className="p-4 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                title="Stop Recording"
+              >
+                <Square className="w-6 h-6" />
+              </button>
             ) : !audioBlob ? (
               <button
                 onClick={startRecording}
@@ -344,25 +315,13 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
               Cancel
             </button>
             
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => {
-                  cleanup();
-                  startRecording();
-                }}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
-              >
-                Re-record
-              </button>
-              
-              <button
-                onClick={handleSend}
-                className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
-              >
-                <Send className="w-4 h-4" />
-                <span>Send</span>
-              </button>
-            </div>
+            <button
+              onClick={handleSend}
+              className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+            >
+              <Send className="w-4 h-4" />
+              <span>Send</span>
+            </button>
           </div>
         )}
       </div>

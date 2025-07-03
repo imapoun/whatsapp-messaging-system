@@ -576,7 +576,7 @@ const MessageList = forwardRef(({ messages, currentUserId, onReply, onMediaClick
                             
                             {message.type === 'voice' && (
                               <VoicePlayer
-                                audioBlob={message.audioBlob}
+                                audioDataURL={message.audioDataURL}
                                 initialDuration={message.duration}
                                 isOwnMessage={isOwnMessage}
                                 className={`${
