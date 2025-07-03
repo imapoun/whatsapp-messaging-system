@@ -54,27 +54,15 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 44100,
+          sampleRate: 48000,
           channelCount: 1
         } 
       });
       
       streamRef.current = stream;
       
-      // Use a more compatible format
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'audio/mp4';
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = ''; // Let browser choose
-          }
-        }
-      }
-      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType || undefined,
+        mimeType: 'audio/webm;codecs=opus',
         audioBitsPerSecond: 128000
       });
       
@@ -89,21 +77,27 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { 
-          type: mediaRecorder.mimeType || 'audio/webm' 
+          type: 'audio/webm;codecs=opus'
         });
         setAudioBlob(blob);
-        console.log('Recording stopped, blob created:', {
-          size: blob.size,
-          type: blob.type,
-          duration: recordingTime
-        });
+        
+        // Auto-send when recording stops
+        setTimeout(() => {
+          if (blob && recordingTime > 0) {
+            const voiceMessage = {
+              type: 'voice',
+              audioBlob: blob,
+              rawDuration: recordingTime,
+              size: blob.size,
+              mimeType: blob.type
+            };
+            onSend(voiceMessage);
+            onClose();
+          }
+        }, 100);
       };
 
-      mediaRecorder.onerror = (event) => {
-        console.error('MediaRecorder error:', event.error);
-      };
-
-      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorder.start(100);
       setIsRecording(true);
       setRecordingTime(0);
     } catch (error) {
@@ -129,21 +123,6 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleSend = () => {
-    if (audioBlob && recordingTime > 0) {
-      const voiceMessage = {
-        type: 'voice',
-        audioBlob,
-        rawDuration: recordingTime, // Send raw duration in seconds
-        size: audioBlob.size,
-        mimeType: audioBlob.type
-      };
-      console.log('Sending voice message:', voiceMessage);
-      onSend(voiceMessage);
-      onClose();
-    }
-  };
-
   const handleCancel = () => {
     cleanup();
     onClose();
@@ -154,10 +133,9 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <h3 className="text-lg font-semibold text-gray-800">
-            {isRecording ? 'Recording Voice Message' : audioBlob ? 'Voice Message Ready' : 'Voice Message'}
+            {isRecording ? 'Recording Voice Message' : 'Voice Message'}
           </h3>
           <button
             onClick={handleCancel}
@@ -167,9 +145,7 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
           </button>
         </div>
 
-        {/* Recording Area */}
         <div className="p-6 space-y-6">
-          {/* Waveform Visualization (Mock) */}
           <div className="flex items-center justify-center h-20 bg-gray-50 rounded-lg">
             <div className="flex items-end space-x-1 h-12">
               {Array.from({ length: 20 }).map((_, i) => (
@@ -188,32 +164,28 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
             </div>
           </div>
 
-          {/* Timer */}
           <div className="text-center">
             <div className="text-3xl font-mono font-bold text-gray-800">
               {formatTime(recordingTime)}
             </div>
             <p className="text-sm text-gray-500 mt-1">
               {isRecording 
-                ? 'Recording... Tap stop when finished'
-                : audioBlob 
-                  ? 'Recording complete - ready to send'
-                  : 'Tap to start recording'
+                ? 'Recording... Tap stop to send'
+                : 'Tap to start recording'
               }
             </p>
           </div>
 
-          {/* Recording Controls */}
           <div className="flex items-center justify-center space-x-4">
             {isRecording ? (
               <button
                 onClick={stopRecording}
                 className="p-4 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg"
-                title="Stop Recording"
+                title="Stop and Send"
               >
                 <Square className="w-6 h-6" />
               </button>
-            ) : !audioBlob ? (
+            ) : (
               <button
                 onClick={startRecording}
                 className="p-6 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors animate-pulse shadow-lg"
@@ -221,29 +193,9 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
               >
                 <Mic className="w-8 h-8" />
               </button>
-            ) : null}
+            )}
           </div>
         </div>
-
-        {/* Footer Actions - Only show when recording is complete */}
-        {audioBlob && !isRecording && (
-          <div className="flex items-center justify-between p-6 border-t bg-gray-50 rounded-b-2xl">
-            <button
-              onClick={handleCancel}
-              className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            
-            <button
-              onClick={handleSend}
-              className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2 shadow-md"
-            >
-              <Send className="w-4 h-4" />
-              <span>Send ({formatTime(recordingTime)})</span>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

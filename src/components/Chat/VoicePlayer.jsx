@@ -19,10 +19,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
       setAudioDuration(audio.duration);
       setIsLoading(false);
       setHasError(false);
-      console.log('Audio loaded successfully:', {
-        duration: audio.duration,
-        src: audioDataURL.substring(0, 50) + '...'
-      });
     };
 
     const handleTimeUpdate = () => {
@@ -40,33 +36,20 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
       setHasError(false);
     };
 
-    const handleError = (e) => {
+    const handleError = () => {
       setIsLoading(false);
       setHasError(true);
-      console.error('Audio failed to load:', {
-        error: e,
-        audioSrc: audioDataURL ? audioDataURL.substring(0, 50) + '...' : 'null',
-        audioElement: audio
-      });
     };
 
-    const handleLoadStart = () => {
-      setIsLoading(true);
-      setHasError(false);
-    };
-
-    audio.addEventListener('loadstart', handleLoadStart);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
 
-    // Force load the audio
     audio.load();
 
     return () => {
-      audio.removeEventListener('loadstart', handleLoadStart);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
@@ -83,24 +66,15 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
       audio.pause();
       setIsPlaying(false);
     } else {
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            setIsPlaying(true);
-          })
-          .catch(error => {
-            console.error('Audio play failed:', error);
-            setHasError(true);
-          });
-      }
+      audio.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setHasError(true));
     }
   };
 
   const toggleMute = () => {
     const audio = audioRef.current;
     if (!audio) return;
-
     audio.muted = !isMuted;
     setIsMuted(!isMuted);
   };
@@ -127,7 +101,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
   const displayDuration = audioDuration || initialDuration || 0;
 
-  // Show loading state if no audioDataURL yet
   if (!audioDataURL) {
     return (
       <div className={`flex items-center space-x-3 p-3 rounded-lg ${className}`}>
@@ -141,7 +114,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
     );
   }
 
-  // Show error state
   if (hasError) {
     return (
       <div className={`flex items-center space-x-3 p-3 rounded-lg ${className}`}>
@@ -165,10 +137,8 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
         ref={audioRef} 
         src={audioDataURL} 
         preload="metadata"
-        crossOrigin="anonymous"
       />
       
-      {/* Play/Pause Button */}
       <button
         onClick={togglePlayPause}
         disabled={isLoading || hasError}
@@ -177,7 +147,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
             ? 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white'
             : 'bg-green-500 hover:bg-green-600 text-white'
         } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        title={isPlaying ? 'Pause' : 'Play'}
       >
         {isLoading ? (
           <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -188,9 +157,7 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
         )}
       </button>
 
-      {/* Waveform/Progress Bar */}
       <div className="flex-1 space-y-1">
-        {/* Visual Waveform (Mock) */}
         <div className="flex items-center space-x-1 h-8">
           {Array.from({ length: 30 }).map((_, i) => {
             const barProgress = (i / 30) * 100;
@@ -217,7 +184,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
           })}
         </div>
 
-        {/* Progress Bar */}
         <div 
           className="w-full bg-gray-200 bg-opacity-30 rounded-full h-1 cursor-pointer"
           onClick={handleSeek}
@@ -230,7 +196,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
           />
         </div>
 
-        {/* Time Display */}
         <div className={`flex justify-between text-xs ${
           isOwnMessage ? 'text-green-100' : 'text-gray-500'
         }`}>
@@ -239,7 +204,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
         </div>
       </div>
 
-      {/* Volume Button */}
       <button
         onClick={toggleMute}
         className={`flex-shrink-0 p-1 rounded-full transition-colors ${
@@ -247,7 +211,6 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
             ? 'hover:bg-white hover:bg-opacity-20 text-white'
             : 'hover:bg-gray-100 text-gray-600'
         }`}
-        title={isMuted ? 'Unmute' : 'Mute'}
       >
         {isMuted ? (
           <VolumeX className="w-4 h-4" />
