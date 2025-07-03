@@ -99,7 +99,7 @@ const VoicePlayer = ({ audioDataURL, initialDuration, isOwnMessage, className = 
   };
 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
-  const displayDuration = audioDuration || initialDuration || 0;
+  const displayDuration = audioDuration || (typeof initialDuration === 'number' ? initialDuration : 0);
 
   if (!audioDataURL) {
     return (

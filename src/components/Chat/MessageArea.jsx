@@ -21,7 +21,7 @@ import MessageList from './MessageList';
 import EmojiPicker from './EmojiPicker';
 import FileUploadModal from './FileUploadModal';
 import MediaViewer from './MediaViewer';
-import VoiceRecorder from './VoiceRecorder';
+import SimpleVoiceRecorder from './SimpleVoiceRecorder';
 
 const MessageArea = () => {
   const dispatch = useDispatch();
@@ -40,7 +40,7 @@ const MessageArea = () => {
   const [mediaViewerFiles, setMediaViewerFiles] = useState([]);
   const [mediaViewerIndex, setMediaViewerIndex] = useState(0);
   const [videoThumbnails, setVideoThumbnails] = useState({});
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   
   const messageListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -203,8 +203,8 @@ const MessageArea = () => {
           fileUrl: file.url,
           fileName: file.name,
           fileSize: formatFileSize(file.size),
-          fileType: file.type, // Add this to preserve file type
-          thumbnailUrl: fileType.startsWith('video/') ? videoThumbnails[file.id] : null, // Add thumbnail for videos
+          fileType: file.type,
+          thumbnailUrl: fileType.startsWith('video/') ? videoThumbnails[file.id] : null,
           replyTo: replyingTo ? {
             id: replyingTo.id,
             content: replyingTo.content,
@@ -300,11 +300,8 @@ const MessageArea = () => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('Paperclip clicked!'); // Debug log
-    
     if (paperclipButtonRef.current) {
       const rect = paperclipButtonRef.current.getBoundingClientRect();
-      console.log('Button rect:', rect); // Debug log
       
       setFileUploadPosition({
         bottom: window.innerHeight - rect.top,
@@ -313,17 +310,15 @@ const MessageArea = () => {
     }
     
     setShowFileUploadModal(true);
-    setShowEmojiPicker(false); // Close emoji picker if open
+    setShowEmojiPicker(false);
   };
 
   const handleFileSelect = (files, type) => {
-    console.log('Files selected:', files, type); // Debug log
-    
     const processedFiles = files.map(file => ({
       ...file,
       url: URL.createObjectURL(file),
       id: Date.now() + Math.random(),
-      type: file.type // Ensure type is preserved
+      type: file.type
     }));
     
     setUploadedFiles(prev => [...prev, ...processedFiles]);
@@ -334,12 +329,11 @@ const MessageArea = () => {
     setUploadedFiles(prev => {
       const fileToRemove = prev.find(f => f.id === fileId);
       if (fileToRemove && fileToRemove.url) {
-        URL.revokeObjectURL(fileToRemove.url); // Clean up blob URL
+        URL.revokeObjectURL(fileToRemove.url);
       }
       return prev.filter(file => file.id !== fileId);
     });
     
-    // Clean up video thumbnail if exists
     if (videoThumbnails[fileId]) {
       URL.revokeObjectURL(videoThumbnails[fileId]);
       setVideoThumbnails(prev => {
@@ -357,7 +351,6 @@ const MessageArea = () => {
   };
 
   const handleUploadedFileClick = (file, index) => {
-    // Create media files array from uploaded files (only images and videos)
     const mediaFiles = uploadedFiles
       .filter(f => {
         const fileType = f.type || '';
@@ -369,7 +362,6 @@ const MessageArea = () => {
         type: f.type
       }));
     
-    // Find the index of the clicked file in the media files array
     const mediaIndex = mediaFiles.findIndex(f => f.url === file.url);
     
     if (mediaIndex !== -1) {
@@ -378,7 +370,6 @@ const MessageArea = () => {
   };
 
   const handleMediaClick = (message) => {
-    // Find all media messages in the current chat
     const mediaMessages = chatMessages.filter(msg => 
       msg.type === 'image' || msg.type === 'video'
     );
@@ -386,7 +377,7 @@ const MessageArea = () => {
     const mediaFiles = mediaMessages.map(msg => ({
       url: msg.fileUrl,
       name: msg.fileName || 'Media file',
-      type: msg.fileType || (msg.type === 'image' ? 'image/jpeg' : 'video/mp4') // Use fileType if available, fallback to type
+      type: msg.fileType || (msg.type === 'image' ? 'image/jpeg' : 'video/mp4')
     }));
     
     const currentIndex = mediaMessages.findIndex(msg => msg.id === message.id);
@@ -417,24 +408,23 @@ const MessageArea = () => {
   };
 
   const handleVoiceRecordStart = () => {
-    setShowVoiceRecorder(true);
+    setIsRecordingVoice(true);
     setShowEmojiPicker(false);
   };
 
   const handleVoiceSend = async (voiceMessage) => {
     try {
-      // Convert the audio blob to a Data URL for serialization
       const audioDataURL = await blobToDataURL(voiceMessage.audioBlob);
       
       const messageData = {
         chatId: activeChat,
         content: '',
         type: 'voice',
-        audioDataURL: audioDataURL, // Store as Data URL instead of blob
+        audioDataURL: audioDataURL,
         fileName: `voice_${Date.now()}.webm`,
         fileSize: formatFileSize(voiceMessage.size),
         fileType: voiceMessage.mimeType,
-        duration: voiceMessage.rawDuration, // Pass raw duration in seconds
+        duration: voiceMessage.duration,
         replyTo: replyingTo ? {
           id: replyingTo.id,
           content: replyingTo.content,
@@ -444,8 +434,8 @@ const MessageArea = () => {
 
       await dispatch(sendMessage(messageData)).unwrap();
       setReplyingTo(null);
+      setIsRecordingVoice(false);
       
-      // Auto-scroll to bottom
       setTimeout(() => {
         if (messageListRef.current?.scrollToBottom) {
           messageListRef.current.scrollToBottom();
@@ -453,7 +443,12 @@ const MessageArea = () => {
       }, 100);
     } catch (error) {
       console.error('Failed to send voice message:', error);
+      setIsRecordingVoice(false);
     }
+  };
+
+  const handleVoiceCancel = () => {
+    setIsRecordingVoice(false);
   };
 
   if (!currentChat) {
@@ -668,62 +663,69 @@ const MessageArea = () => {
           </div>
         )}
         
-        <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <Smile className="w-5 h-5" />
-            </button>
-            
-            <button
-              ref={paperclipButtonRef}
-              type="button"
-              onClick={handlePaperclipClick}
-              data-paperclip-button="true"
-              className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <Paperclip className="w-5 h-5" />
-            </button>
-          </div>
+        {isRecordingVoice ? (
+          <SimpleVoiceRecorder
+            onSend={handleVoiceSend}
+            onCancel={handleVoiceCancel}
+          />
+        ) : (
+          <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+              
+              <button
+                ref={paperclipButtonRef}
+                type="button"
+                onClick={handlePaperclipClick}
+                data-paperclip-button="true"
+                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
+            </div>
 
-          <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={messageInput}
-              onChange={handleInputChange}
-              placeholder={
-                uploadedFiles.length > 0 
-                  ? "Add a caption..." 
-                  : replyingTo 
-                    ? `Reply to ${replyingTo.sender?.name}...` 
-                    : "Type a message..."
-              }
-              className="w-full px-4 py-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-base"
-            />
-          </div>
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={messageInput}
+                onChange={handleInputChange}
+                placeholder={
+                  uploadedFiles.length > 0 
+                    ? "Add a caption..." 
+                    : replyingTo 
+                      ? `Reply to ${replyingTo.sender?.name}...` 
+                      : "Type a message..."
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-base"
+              />
+            </div>
 
-          {(messageInput.trim() || uploadedFiles.length > 0) ? (
-            <button
-              type="submit"
-              className="p-3 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-full transition-colors"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleVoiceRecordStart}
-              className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-              title="Record voice message"
-            >
-              <Mic className="w-5 h-5" />
-            </button>
-          )}
-        </form>
+            {(messageInput.trim() || uploadedFiles.length > 0) ? (
+              <button
+                type="submit"
+                className="p-3 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-full transition-colors"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleVoiceRecordStart}
+                className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
+                title="Record voice message"
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+            )}
+          </form>
+        )}
       </div>
 
       {/* File Upload Modal */}
@@ -740,13 +742,6 @@ const MessageArea = () => {
         onClose={() => setShowMediaViewer(false)}
         files={mediaViewerFiles}
         initialIndex={mediaViewerIndex}
-      />
-
-      {/* Voice Recorder */}
-      <VoiceRecorder
-        isOpen={showVoiceRecorder}
-        onClose={() => setShowVoiceRecorder(false)}
-        onSend={handleVoiceSend}
       />
     </div>
   );
