@@ -182,13 +182,13 @@ const VoiceRecorder = ({ isOpen, onClose, onSend }) => {
   };
 
   const handleSend = () => {
-    if (audioBlob && audioUrl) {
+    if (audioBlob) {
       const voiceMessage = {
         type: 'voice',
         audioBlob,
-        audioUrl,
-        duration: formatTime(duration),
-        size: audioBlob.size
+        rawDuration: duration, // Send raw duration in seconds
+        size: audioBlob.size,
+        mimeType: audioBlob.type
       };
       onSend(voiceMessage);
       onClose();

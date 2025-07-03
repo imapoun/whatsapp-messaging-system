@@ -1,18 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 
-const VoicePlayer = ({ audioUrl, duration, isOwnMessage, className = '' }) => {
+const VoicePlayer = ({ audioBlob, initialDuration, isOwnMessage, className = '' }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [audioUrl, setAudioUrl] = useState(null);
   
   const audioRef = useRef(null);
 
+  // Create blob URL when component mounts or audioBlob changes
+  useEffect(() => {
+    if (audioBlob) {
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(url);
+      
+      // Cleanup function to revoke the URL when component unmounts or audioBlob changes
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    }
+  }, [audioBlob]);
+
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !audioUrl) return;
 
     const handleLoadedMetadata = () => {
       setAudioDuration(audio.duration);
@@ -33,9 +47,9 @@ const VoicePlayer = ({ audioUrl, duration, isOwnMessage, className = '' }) => {
       setIsLoading(false);
     };
 
-    const handleError = () => {
+    const handleError = (e) => {
       setIsLoading(false);
-      console.error('Audio failed to load');
+      console.error('Audio failed to load:', e);
     };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -96,6 +110,20 @@ const VoicePlayer = ({ audioUrl, duration, isOwnMessage, className = '' }) => {
   };
 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
+
+  // Show loading state if no audioUrl yet
+  if (!audioUrl) {
+    return (
+      <div className={`flex items-center space-x-3 p-3 rounded-lg ${className}`}>
+        <div className="flex-shrink-0 p-2 rounded-full bg-gray-300 animate-pulse">
+          <div className="w-5 h-5" />
+        </div>
+        <div className="flex-1">
+          <div className="h-8 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex items-center space-x-3 p-3 rounded-lg ${className}`}>
@@ -168,7 +196,7 @@ const VoicePlayer = ({ audioUrl, duration, isOwnMessage, className = '' }) => {
           isOwnMessage ? 'text-green-100' : 'text-gray-500'
         }`}>
           <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(audioDuration)}</span>
+          <span>{formatTime(audioDuration || initialDuration || 0)}</span>
         </div>
       </div>
 

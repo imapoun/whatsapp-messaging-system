@@ -154,15 +154,24 @@ export const sendMessage = createAsyncThunk(
         createdAt: new Date().toISOString(),
         replyTo: messageData.replyTo || null,
         reactions: [],
-        // Include file-related fields if present
-        ...(messageData.fileUrl && {
-          fileUrl: messageData.fileUrl,
-          fileName: messageData.fileName,
-          fileSize: messageData.fileSize,
-          fileType: messageData.fileType, // Preserve the original file type
-          thumbnailUrl: messageData.thumbnailUrl, // Add thumbnail URL for videos
-        })
       };
+
+      // Handle voice messages - store blob and metadata directly
+      if (messageData.type === 'voice') {
+        newMessage.audioBlob = messageData.audioBlob;
+        newMessage.duration = messageData.duration; // Raw duration in seconds
+        newMessage.fileName = messageData.fileName;
+        newMessage.fileSize = messageData.fileSize;
+        newMessage.fileType = messageData.fileType;
+        // Don't set fileUrl for voice messages
+      } else if (messageData.fileUrl) {
+        // For other file types, include file-related fields
+        newMessage.fileUrl = messageData.fileUrl;
+        newMessage.fileName = messageData.fileName;
+        newMessage.fileSize = messageData.fileSize;
+        newMessage.fileType = messageData.fileType;
+        newMessage.thumbnailUrl = messageData.thumbnailUrl;
+      }
       
       return newMessage;
     } catch (error) {

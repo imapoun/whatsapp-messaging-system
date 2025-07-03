@@ -413,20 +413,15 @@ const MessageArea = () => {
 
   const handleVoiceSend = async (voiceMessage) => {
     try {
-      // Create a file from the audio blob
-      const audioFile = new File([voiceMessage.audioBlob], `voice_${Date.now()}.webm`, {
-        type: voiceMessage.audioBlob.type
-      });
-
       const messageData = {
         chatId: activeChat,
         content: '',
         type: 'voice',
-        fileUrl: voiceMessage.audioUrl,
-        fileName: audioFile.name,
-        fileSize: formatFileSize(voiceMessage.audioBlob.size),
-        fileType: voiceMessage.audioBlob.type,
-        duration: voiceMessage.duration,
+        audioBlob: voiceMessage.audioBlob, // Pass the blob directly
+        fileName: `voice_${Date.now()}.webm`,
+        fileSize: formatFileSize(voiceMessage.size),
+        fileType: voiceMessage.mimeType,
+        duration: voiceMessage.rawDuration, // Pass raw duration in seconds
         replyTo: replyingTo ? {
           id: replyingTo.id,
           content: replyingTo.content,
