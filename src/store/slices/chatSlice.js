@@ -156,9 +156,9 @@ export const sendMessage = createAsyncThunk(
         reactions: [],
       };
 
-      // Handle voice messages - store blob and metadata directly
+      // Handle voice messages - store Data URL instead of blob
       if (messageData.type === 'voice') {
-        newMessage.audioBlob = messageData.audioBlob;
+        newMessage.audioDataURL = messageData.audioDataURL; // Store Data URL
         newMessage.duration = messageData.duration; // Raw duration in seconds
         newMessage.fileName = messageData.fileName;
         newMessage.fileSize = messageData.fileSize;

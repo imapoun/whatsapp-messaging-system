@@ -57,6 +57,16 @@ const MessageArea = () => {
   
   const isParticipantOnline = participant ? onlineUsers.includes(participant.id) : false;
 
+  // Function to convert Blob to Data URL
+  const blobToDataURL = (blob) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   // Function to generate video thumbnail
   const generateVideoThumbnail = (videoFile, videoUrl) => {
     return new Promise((resolve) => {
@@ -413,11 +423,14 @@ const MessageArea = () => {
 
   const handleVoiceSend = async (voiceMessage) => {
     try {
+      // Convert the audio blob to a Data URL for serialization
+      const audioDataURL = await blobToDataURL(voiceMessage.audioBlob);
+      
       const messageData = {
         chatId: activeChat,
         content: '',
         type: 'voice',
-        audioBlob: voiceMessage.audioBlob, // Pass the blob directly
+        audioDataURL: audioDataURL, // Store as Data URL instead of blob
         fileName: `voice_${Date.now()}.webm`,
         fileSize: formatFileSize(voiceMessage.size),
         fileType: voiceMessage.mimeType,
